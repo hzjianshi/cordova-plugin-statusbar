@@ -34,7 +34,9 @@ import org.apache.cordova.CordovaWebView;
 import org.apache.cordova.LOG;
 import org.apache.cordova.PluginResult;
 import org.json.JSONException;
-import java.util.Arrays;
+
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 
 public class StatusBar extends CordovaPlugin {
     private static final String TAG = "StatusBar";
@@ -57,13 +59,19 @@ public class StatusBar extends CordovaPlugin {
                 // Clear flag FLAG_FORCE_NOT_FULLSCREEN which is set initially
                 // by the Cordova.
                 Window window = cordova.getActivity().getWindow();
-                window.clearFlags(WindowManager.LayoutParams.FLAG_FORCE_NOT_FULLSCREEN);
+//                window.clearFlags(WindowManager.LayoutParams.FLAG_FORCE_NOT_FULLSCREEN);
+//
+//                // Read 'StatusBarBackgroundColor' from config.xml, default is #000000.
+//                setStatusBarBackgroundColor(preferences.getString("StatusBarBackgroundColor", "#000000"));
 
-                // Read 'StatusBarBackgroundColor' from config.xml, default is #000000.
-                setStatusBarBackgroundColor(preferences.getString("StatusBarBackgroundColor", "#000000"));
-
-                // Read 'StatusBarStyle' from config.xml, default is 'lightcontent'.
-                setStatusBarStyle(preferences.getString("StatusBarStyle", "lightcontent"));
+              //清除MainActivity中的FLAG_FULLSCREEN
+              window.clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
+              //设置全屏
+              window.getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN);
+              // 4.4以上 直接采用半透明状态栏 后面styleDefault等方法也不会再修改状态栏了
+              if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
+                window.addFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS);
+              }
             }
         });
     }
@@ -78,7 +86,7 @@ public class StatusBar extends CordovaPlugin {
      */
     @Override
     public boolean execute(final String action, final CordovaArgs args, final CallbackContext callbackContext) throws JSONException {
-        LOG.v(TAG, "Executing action: " + action);
+      LOG.v(TAG, "Executing action: " + action);
         final Activity activity = this.cordova.getActivity();
         final Window window = activity.getWindow();
 
@@ -110,27 +118,47 @@ public class StatusBar extends CordovaPlugin {
             return true;
         }
 
-        if ("hide".equals(action)) {
-            this.cordova.getActivity().runOnUiThread(new Runnable() {
-                @Override
-                public void run() {
-                    // SYSTEM_UI_FLAG_FULLSCREEN is available since JellyBean, but we
-                    // use KitKat here to be aligned with "Fullscreen"  preference
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
-                        int uiOptions = window.getDecorView().getSystemUiVisibility()
-                                | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-                                | View.SYSTEM_UI_FLAG_FULLSCREEN;
+      if ("hide".equals(action)) {
+        this.cordova.getActivity().runOnUiThread(new Runnable() {
+          @Override
+          public void run() {
+            // SYSTEM_UI_FLAG_FULLSCREEN is available since JellyBean, but we
+            // use KitKat here to be aligned with "Fullscreen"  preference
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
+              int uiOptions = window.getDecorView().getSystemUiVisibility()
+                | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                | View.SYSTEM_UI_FLAG_FULLSCREEN;
 
-                        window.getDecorView().setSystemUiVisibility(uiOptions);
-                    }
+              window.getDecorView().setSystemUiVisibility(uiOptions);
+            }
 
-                    // CB-11197 We still need to update LayoutParams to force status bar
-                    // to be hidden when entering e.g. text fields
-                    window.addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
-                }
-            });
-            return true;
-        }
+            // CB-11197 We still need to update LayoutParams to force status bar
+            // to be hidden when entering e.g. text fields
+            window.addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
+          }
+        });
+        return true;
+      }
+
+      if ("styleDefault".equals(action)) {
+        this.cordova.getActivity().runOnUiThread(new Runnable() {
+          @Override
+          public void run() {
+            setStatusBarDarkMode(true);
+          }
+        });
+        return true;
+      }
+
+      if ("styleLightContent".equals(action)) {
+        this.cordova.getActivity().runOnUiThread(new Runnable() {
+          @Override
+          public void run() {
+            setStatusBarDarkMode(false);
+          }
+        });
+        return true;
+      }
 
         if ("backgroundColorByHexString".equals(action)) {
             this.cordova.getActivity().runOnUiThread(new Runnable() {
@@ -146,65 +174,63 @@ public class StatusBar extends CordovaPlugin {
             return true;
         }
 
-        if ("overlaysWebView".equals(action)) {
-            if (Build.VERSION.SDK_INT >= 21) {
-                this.cordova.getActivity().runOnUiThread(new Runnable() {
-                    @Override
-                    public void run() {
-                        try {
-                            setStatusBarTransparent(args.getBoolean(0));
-                        } catch (JSONException ignore) {
-                            LOG.e(TAG, "Invalid boolean argument");
-                        }
-                    }
-                });
-                return true;
-            }
-            else return args.getBoolean(0) == false;
-        }
-
-        if ("styleDefault".equals(action)) {
-            this.cordova.getActivity().runOnUiThread(new Runnable() {
-                @Override
-                public void run() {
-                    setStatusBarStyle("default");
-                }
-            });
-            return true;
-        }
-
-        if ("styleLightContent".equals(action)) {
-            this.cordova.getActivity().runOnUiThread(new Runnable() {
-                @Override
-                public void run() {
-                    setStatusBarStyle("lightcontent");
-                }
-            });
-            return true;
-        }
-
-        if ("styleBlackTranslucent".equals(action)) {
-            this.cordova.getActivity().runOnUiThread(new Runnable() {
-                @Override
-                public void run() {
-                    setStatusBarStyle("blacktranslucent");
-                }
-            });
-            return true;
-        }
-
-        if ("styleBlackOpaque".equals(action)) {
-            this.cordova.getActivity().runOnUiThread(new Runnable() {
-                @Override
-                public void run() {
-                    setStatusBarStyle("blackopaque");
-                }
-            });
-            return true;
-        }
-
         return false;
     }
+
+  private void setStatusBarDarkMode(boolean dark) {
+    Window window = cordova.getActivity().getWindow();
+
+    // 4.4 以上设置了半透明才会修改状态文字颜色
+    if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
+      // 小米MIUI
+      try {
+        Class clazz = window.getClass();
+        Class layoutParams = Class.forName("android.view.MiuiWindowManager$LayoutParams");
+        Field field = layoutParams.getField("EXTRA_FLAG_STATUS_BAR_DARK_MODE");
+        int darkModeFlag = field.getInt(layoutParams);
+        Method extraFlagField = clazz.getMethod("setExtraFlags", int.class, int.class);
+        if (dark) {    //状态栏亮色且黑色字体
+          extraFlagField.invoke(window, darkModeFlag, darkModeFlag);
+        } else {       //清除黑色字体
+          extraFlagField.invoke(window, 0, darkModeFlag);
+        }
+      } catch (Exception e) {
+        e.printStackTrace();
+      }
+
+      // 魅族FlymeUI
+      try {
+        WindowManager.LayoutParams lp = window.getAttributes();
+        Field darkFlag = WindowManager.LayoutParams.class.getDeclaredField("MEIZU_FLAG_DARK_STATUS_BAR_ICON");
+        Field meizuFlags = WindowManager.LayoutParams.class.getDeclaredField("meizuFlags");
+        darkFlag.setAccessible(true);
+        meizuFlags.setAccessible(true);
+        int bit = darkFlag.getInt(null);
+        int value = meizuFlags.getInt(lp);
+        if (dark) {
+          value |= bit;
+        } else {
+          value &= ~bit;
+        }
+        meizuFlags.setInt(lp, value);
+        window.setAttributes(lp);
+      } catch (Exception e) {
+        e.printStackTrace();
+      }
+    }
+
+    // android6.0+系统
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+      int ui = window.getDecorView().getSystemUiVisibility();
+      if (dark) {
+        ui |= View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
+      } else {
+        ui &= ~View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
+        window.setStatusBarColor(Color.TRANSPARENT);
+      }
+      window.getDecorView().setSystemUiVisibility(ui);
+    }
+  }
 
     private void setStatusBarBackgroundColor(final String colorPref) {
         if (Build.VERSION.SDK_INT >= 21) {
@@ -222,54 +248,6 @@ public class StatusBar extends CordovaPlugin {
                     // this should not happen, only in case Android removes this method in a version > 21
                     LOG.w(TAG, "Method window.setStatusBarColor not found for SDK level " + Build.VERSION.SDK_INT);
                 }
-            }
-        }
-    }
-
-    private void setStatusBarTransparent(final boolean transparent) {
-        if (Build.VERSION.SDK_INT >= 21) {
-            final Window window = cordova.getActivity().getWindow();
-            if (transparent) {
-                window.getDecorView().setSystemUiVisibility(
-                        View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-                                | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN);
-                window.setStatusBarColor(Color.TRANSPARENT);
-            }
-            else {
-                window.getDecorView().setSystemUiVisibility(
-                        View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-                                | View.SYSTEM_UI_FLAG_VISIBLE);
-            }
-        }
-    }
-
-    private void setStatusBarStyle(final String style) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            if (style != null && !style.isEmpty()) {
-                View decorView = cordova.getActivity().getWindow().getDecorView();
-                int uiOptions = decorView.getSystemUiVisibility();
-
-                String[] darkContentStyles = {
-                    "default",
-                };
-
-                String[] lightContentStyles = {
-                    "lightcontent",
-                    "blacktranslucent",
-                    "blackopaque",
-                };
-
-                if (Arrays.asList(darkContentStyles).contains(style.toLowerCase())) {
-                    decorView.setSystemUiVisibility(uiOptions | View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
-                    return;
-                }
-
-                if (Arrays.asList(lightContentStyles).contains(style.toLowerCase())) {
-                    decorView.setSystemUiVisibility(uiOptions & ~View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
-                    return;
-                }
-
-                LOG.e(TAG, "Invalid style, must be either 'default', 'lightcontent' or the deprecated 'blacktranslucent' and 'blackopaque'");
             }
         }
     }
